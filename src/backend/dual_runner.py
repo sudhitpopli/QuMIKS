@@ -34,8 +34,8 @@ class DualSimRunner:
         print(f"[DUAL-SIM] Initializing environments on {self.device}...")
         
         # Load Configs
-        v2_args = self._load_config("config/improved_qmix.yaml")
-        native_args = self._load_config("config/native.yaml")
+        v2_args = self._load_config("config/v2.0.yaml")
+        native_args = self._load_config("config/sumo_default.yaml")
 
         # Initialize Envs with unique Ports and Labels
         # Port 8813 = QMIX AI
