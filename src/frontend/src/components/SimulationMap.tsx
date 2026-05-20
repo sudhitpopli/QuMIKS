@@ -3,23 +3,33 @@ import type { Vehicle } from '../hooks/useTrafficSocket';
 
 interface SimulationMapProps {
   vehicles: Vehicle[];
-  isActive: boolean; // true for V2, false for Native to change colors
+  isActive: boolean;
   title: string;
-  mapRoads?: number[][][]; // Polygons from SUMO
+  mapRoads?: number[][][];
 }
 
 export default function SimulationMap({ vehicles, isActive, title, mapRoads }: SimulationMapProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // We want to zoom in on a small section of the map where cars are actually concentrated.
-  // We strictly EXPAND the bounding box. Once the simulation runs the outer edges of the map,
-  // the camera will perfectly freeze in place, allowing us to draw trails without blurring.
-  const boundsRef = useRef({
-    minX: 100000,
-    maxX: -100000,
-    minY: 100000,
-    maxY: -100000
-  });
+  // FIX 1: Bounds are locked ONCE from the road geometry, NOT from vehicle positions.
+  // This is why roads were "wiggling" — the old code re-derived bounds from vehicles every frame.
+  const boundsRef = useRef<{ minX: number; maxX: number; minY: number; maxY: number } | null>(null);
+
+  // Derive and lock bounds from roads the first time roads are available.
+  if (mapRoads && mapRoads.length > 0 && boundsRef.current === null) {
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    mapRoads.forEach(road => {
+      road.forEach(([x, y]) => {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      });
+    });
+    const padX = (maxX - minX) * 0.03;
+    const padY = (maxY - minY) * 0.03;
+    boundsRef.current = { minX: minX - padX, maxX: maxX + padX, minY: minY - padY, maxY: maxY + padY };
+  }
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -27,72 +37,57 @@ export default function SimulationMap({ vehicles, isActive, title, mapRoads }: S
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-
-    if (vehicles.length > 0) {
-      let cMinX = Infinity, cMaxX = -Infinity, cMinY = Infinity, cMaxY = -Infinity;
-      vehicles.forEach(v => {
-        if (v.x < cMinX) cMinX = v.x;
-        if (v.x > cMaxX) cMaxX = v.x;
-        if (v.y < cMinY) cMinY = v.y;
-        if (v.y > cMaxY) cMaxY = v.y;
-      });
-
-      // Expand camera statically
-      const padX = 200;
-      const padY = 200;
-      if (cMinX - padX < boundsRef.current.minX) boundsRef.current.minX = cMinX - padX;
-      if (cMaxX + padX > boundsRef.current.maxX) boundsRef.current.maxX = cMaxX + padX;
-      if (cMinY - padY < boundsRef.current.minY) boundsRef.current.minY = cMinY - padY;
-      if (cMaxY + padY > boundsRef.current.maxY) boundsRef.current.maxY = cMaxY + padY;
-    }
-
-    let { minX, maxX, minY, maxY } = boundsRef.current;
-
-    // Default bounds override ONLY for the drawing sequence so the map renders massively zoomed out on boot.
-    // We strictly DO NOT mutate `boundsRef.current` so the auto-snapping logic works perfectly once cars spawn!
-    if (minX >= maxX) {
-      minX = 0;
-      maxX = 6520;
-      minY = 0;
-      maxY = 11330;
-    }
-
-    const mapWidth = maxX - minX;
-    const mapHeight = maxY - minY;
-
     const width = canvas.width;
     const height = canvas.height;
 
-    // MAGICAL FADING WIPE
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.12)'; 
+    // If we don't have road-derived bounds yet, just show a loading placeholder.
+    // This is the key fix — we never render the giant "all of Connaught Place" fallback anymore.
+    if (boundsRef.current === null) {
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(0, 0, width, height);
+      ctx.fillStyle = '#334155';
+      ctx.font = 'bold 13px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('Loading map geometry…', width / 2, height / 2);
+      return;
+    }
+
+    const { minX, maxX, minY, maxY } = boundsRef.current;
+    const mapWidth = maxX - minX;
+    const mapHeight = maxY - minY;
+
+    const toCanvas = (x: number, y: number) => ({
+      nx: ((x - minX) / mapWidth) * width,
+      ny: height - ((y - minY) / mapHeight) * height,
+    });
+
+    // FIX 2: Full clear before drawing roads. The old 0.12-alpha wipe was causing
+    // road lines to "stack up" and look cluttered across frames.
+    ctx.clearRect(0, 0, width, height);
+    ctx.fillStyle = '#0f172a';
     ctx.fillRect(0, 0, width, height);
 
-    // DRAW THE ACTUAL SUMO ROAD MAP
+    // Draw roads on a clean canvas every frame — stable, no ghosting.
     if (mapRoads && mapRoads.length > 0) {
-      ctx.strokeStyle = 'rgba(30, 41, 59, 1.0)'; 
-      ctx.lineWidth = 1;
-      
+      ctx.strokeStyle = 'rgba(51, 65, 85, 0.9)';
+      ctx.lineWidth = 1.2;
       mapRoads.forEach(road => {
         if (road.length < 2) return;
         ctx.beginPath();
-        const startNx = ((road[0][0] - minX) / mapWidth) * width;
-        const startNy = height - (((road[0][1] - minY) / mapHeight) * height);
-        ctx.moveTo(startNx, startNy);
-        
+        const { nx: sx, ny: sy } = toCanvas(road[0][0], road[0][1]);
+        ctx.moveTo(sx, sy);
         for (let i = 1; i < road.length; i++) {
-          const nx = ((road[i][0] - minX) / mapWidth) * width;
-          const ny = height - (((road[i][1] - minY) / mapHeight) * height);
+          const { nx, ny } = toCanvas(road[i][0], road[i][1]);
           ctx.lineTo(nx, ny);
         }
         ctx.stroke();
       });
     }
 
-    // Draw vehicles
+    // FIX 3: Only vehicles get the fading trail effect (the blended semi-transparent layer).
+    // We draw them on top of the clean road layer each frame.
     vehicles.forEach(v => {
-      const nx = ((v.x - minX) / mapWidth) * width;
-      const ny = height - (((v.y - minY) / mapHeight) * height);
-
+      const { nx, ny } = toCanvas(v.x, v.y);
       const rad = (v.phi - 90) * (Math.PI / 180);
 
       ctx.save();
@@ -106,11 +101,12 @@ export default function SimulationMap({ vehicles, isActive, title, mapRoads }: S
       ctx.closePath();
 
       if (isActive) {
-        ctx.fillStyle = '#10b981'; 
+        ctx.fillStyle = '#10b981';
         ctx.shadowColor = '#34d399';
         ctx.shadowBlur = 8;
       } else {
-        ctx.fillStyle = '#94a3b8'; 
+        ctx.fillStyle = '#94a3b8';
+        ctx.shadowBlur = 0;
       }
       ctx.fill();
       ctx.restore();
@@ -137,3 +133,4 @@ export default function SimulationMap({ vehicles, isActive, title, mapRoads }: S
     </div>
   );
 }
+

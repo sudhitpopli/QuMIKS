@@ -1,381 +1,408 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
-// --- Reusable Scroll Reveal Component ---
-const ScrollReveal = ({ children, delay = 0 }: { children: ReactNode, delay?: number }) => {
-  const [isVisible, setIsVisible] = useState(false);
-  const domRef = useRef<HTMLDivElement>(null);
-
+// --- ScrollReveal ---
+const ScrollReveal = ({ children, delay = 0 }: { children: ReactNode; delay?: number }) => {
+  const [vis, setVis] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          setIsVisible(true);
-          if (domRef.current) observer.unobserve(domRef.current);
+    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setVis(true); obs.disconnect(); } }, { threshold: 0.08 });
+    if (ref.current) obs.observe(ref.current);
+    return () => obs.disconnect();
+  }, []);
+  return <div ref={ref} style={{ transitionDelay: `${delay}ms` }} className={`transition-all duration-700 ease-out ${vis ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-12'}`}>{children}</div>;
+};
+
+// --- Shared helpers ---
+const Badge = ({ children }: { children: ReactNode }) => <span className="inline-block px-3 py-1 text-xs font-bold uppercase tracking-widest rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 mb-4">{children}</span>;
+const H2 = ({ children }: { children: ReactNode }) => <h2 className="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400 mb-4 leading-tight">{children}</h2>;
+const Prose = ({ children, className = '' }: { children: ReactNode; className?: string }) => <p className={`text-slate-300 text-lg leading-relaxed ${className}`}>{children}</p>;
+
+// SIMULATION 1 - Indian Fixed-Time Intersection
+const IndianIntersectionSim = () => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const canvas = canvasRef.current!;
+    const ctx = canvas.getContext('2d')!;
+    const W = canvas.width, H = canvas.height;
+    const CX = W / 2, CY = H / 2;
+    const ROAD_W = 40;
+    const RED = 180, GREEN = 90;
+
+    const cars = [
+      { x: CX - ROAD_W / 4, y: 40, dx: 0, dy: 1, arm: 'N', waiting: true, passed: false },
+      { x: CX - ROAD_W / 4 - 22, y: 40, dx: 0, dy: 1, arm: 'N2', waiting: true, passed: false },
+      { x: CX - ROAD_W / 4 - 44, y: 40, dx: 0, dy: 1, arm: 'N3', waiting: true, passed: false },
+      { x: CX + ROAD_W / 4, y: H - 40, dx: 0, dy: -1, arm: 'S', waiting: true, passed: false },
+      { x: CX + ROAD_W / 4 + 22, y: H - 40, dx: 0, dy: -1, arm: 'S2', waiting: true, passed: false },
+      { x: 40, y: CY + ROAD_W / 4, dx: 1, dy: 0, arm: 'W', waiting: false, passed: false },
+      { x: H - 40, y: CY - ROAD_W / 4, dx: -1, dy: 0, arm: 'E', waiting: false, passed: false },
+    ];
+
+    let tick = 0;
+    let raf: number;
+    const STOP_N = CY - ROAD_W - 14;
+    const STOP_S = CY + ROAD_W + 14;
+    const STOP_W = CX - ROAD_W - 14;
+    const STOP_E = CX + ROAD_W + 14;
+
+    const drawRoad = () => {
+      ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = '#334155'; ctx.fillRect(0, CY - ROAD_W, W, ROAD_W * 2);
+      ctx.fillStyle = '#334155'; ctx.fillRect(CX - ROAD_W, 0, ROAD_W * 2, H);
+      ctx.setLineDash([12, 8]); ctx.strokeStyle = '#475569'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(0, CY); ctx.lineTo(W, CY); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(CX, 0); ctx.lineTo(CX, H); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.strokeStyle = '#f8fafc'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(CX - ROAD_W, STOP_N); ctx.lineTo(CX, STOP_N); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(CX, STOP_S); ctx.lineTo(CX + ROAD_W, STOP_S); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(STOP_W, CY - ROAD_W); ctx.lineTo(STOP_W, CY); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(STOP_E, CY); ctx.lineTo(STOP_E, CY + ROAD_W); ctx.stroke();
+    };
+
+    const drawLight = (x: number, y: number, isRed: boolean) => {
+      ctx.fillStyle = '#1e293b'; ctx.beginPath(); ctx.roundRect(x - 8, y - 18, 16, 36, 3); ctx.fill();
+      ctx.shadowColor = isRed ? '#ef4444' : '#22c55e';
+      ctx.shadowBlur = 14;
+      ctx.beginPath(); ctx.arc(x, y - 9, 5, 0, Math.PI * 2); ctx.fillStyle = isRed ? '#ef4444' : '#1e293b'; ctx.fill();
+      ctx.beginPath(); ctx.arc(x, y + 9, 5, 0, Math.PI * 2); ctx.fillStyle = isRed ? '#1e293b' : '#22c55e'; ctx.fill();
+      ctx.shadowBlur = 0;
+    };
+
+    const drawCar = (x: number, y: number, dir: 'h' | 'v', color: string) => {
+      ctx.save(); ctx.translate(x, y);
+      if (dir === 'h') ctx.rotate(0); else ctx.rotate(Math.PI / 2);
+      ctx.fillStyle = color;
+      ctx.beginPath(); ctx.roundRect(-10, -5, 20, 10, 2); ctx.fill();
+      ctx.fillStyle = '#bae6fd'; ctx.beginPath(); ctx.roundRect(-5, -5, 10, 5, 1); ctx.fill();
+      ctx.fillStyle = '#0f172a'; [-7, 7].forEach(wx => { ctx.beginPath(); ctx.arc(wx, 5, 3, 0, Math.PI * 2); ctx.fill(); });
+      ctx.restore();
+    };
+
+    const draw = () => {
+      tick++;
+      const phase = tick % (RED + GREEN);
+      const isNSRed = phase < RED;
+      const isEWRed = !isNSRed;
+      drawRoad();
+      drawLight(CX - ROAD_W - 5, CY - ROAD_W - 5, isNSRed);
+      drawLight(CX + ROAD_W + 5, CY + ROAD_W + 5, isNSRed);
+      drawLight(CX + ROAD_W + 5, CY - ROAD_W - 5, isEWRed);
+      drawLight(CX - ROAD_W - 5, CY + ROAD_W + 5, isEWRed);
+      cars.forEach(car => {
+        if (car.passed) {
+          car.x += car.dx * 1.6; car.y += car.dy * 1.6;
+          if (car.x < -20 || car.x > W + 20 || car.y < -20 || car.y > H + 20) {
+            car.passed = false; car.waiting = true;
+            if (car.arm.startsWith('N')) { car.x = CX - ROAD_W / 4 - (car.arm === 'N2' ? 22 : car.arm === 'N3' ? 44 : 0); car.y = 40; }
+            if (car.arm.startsWith('S')) { car.x = CX + ROAD_W / 4 + (car.arm === 'S2' ? 22 : 0); car.y = H - 40; }
+            if (car.arm === 'W') { car.x = 40; car.y = CY + ROAD_W / 4; }
+            if (car.arm === 'E') { car.x = W - 40; car.y = CY - ROAD_W / 4; }
+          }
+          return;
+        }
+        const ns = car.arm.startsWith('N') || car.arm.startsWith('S');
+        const blocked = ns ? isNSRed : isEWRed;
+        const stopY = car.arm.startsWith('N') ? STOP_N : STOP_S;
+        const stopX = car.arm === 'W' ? STOP_W : STOP_E;
+        if (blocked) {
+          if (ns) car.y = Math.min(Math.max(car.y, stopY - 80), car.dy > 0 ? stopY : H);
+          else car.x = Math.min(Math.max(car.x, stopX - 80), car.dx > 0 ? stopX : W);
+          if ((ns && Math.abs(car.y - stopY) > 2) || (!ns && Math.abs(car.x - stopX) > 2)) { car.x += car.dx * 1.2; car.y += car.dy * 1.2; }
+        } else {
+          car.x += car.dx * 1.8; car.y += car.dy * 1.8;
+          if (car.dx !== 0 && Math.abs(car.x - CX) < 5) car.passed = true;
+          if (car.dy !== 0 && Math.abs(car.y - CY) < 5) car.passed = true;
         }
       });
-    }, { threshold: 0.15 });
-
-    if (domRef.current) observer.observe(domRef.current);
-    return () => observer.disconnect();
+      cars.forEach(c => drawCar(c.x, c.y, c.dx !== 0 ? 'h' : 'v', c.arm.includes('N') || c.arm.includes('S') ? '#f59e0b' : '#60a5fa'));
+      ctx.fillStyle = '#0f172a'; ctx.fillRect(8, 8, 220, 44); ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 1; ctx.strokeRect(8, 8, 220, 44);
+      ctx.fillStyle = '#fca5a5'; ctx.font = 'bold 11px monospace'; ctx.textAlign = 'left';
+      ctx.fillText(`Fixed Timer`, 16, 26);
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillText(`NS: ${isNSRed ? `RED` : 'GREEN'} | EW: ${isEWRed ? 'RED' : 'GREEN'}`, 16, 44);
+      raf = requestAnimationFrame(draw);
+    };
+    raf = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(raf);
   }, []);
-
-  return (
-  <div
-    ref={domRef}
-    className={`transition-all duration-1000 ease-out ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-24'
-      }`}
-    style={{ transitionDelay: `${delay}ms` }}
-  >
-    {children}
-  </div>
-  );
+  return <canvas ref={canvasRef} width={520} height={440} className="w-full rounded-2xl border border-slate-700 bg-slate-900" />;
 };
 
-// --- Shared Constants & Helpers ---
-const INPUT_LABELS = ["Queue Length", "Vehicle Density", "Phase Time"];
-const OUTPUT_LABELS = ["Extend Phase A", "Next Phase A->B", "Extend Phase B", "Emergency Halt"];
-const POS_COLOR = "#10b981"; // Emerald
-const NEG_COLOR = "#64748b"; // Slate Grey
-
-// --- 1. Feedforward ANN Visualizer (Used for System A & B) ---
-const FeedforwardNetwork = ({ title, desc, isLearning, seed }: { title: string, desc: string, isLearning: boolean, seed: number }) => {
-  const [weights, setWeights] = useState(() => Array.from({ length: 28 }, (_, i) => Math.sin(seed * (i + 1)) * 2 - 1));
-  const [biases, setBiases] = useState(() => Array.from({ length: 8 }, (_, i) => Math.cos(seed * (i + 1)) * 2 - 1));
-
-  const [activeNodes, setActiveNodes] = useState<{ hidden: number[], out: number[] }>({ hidden: [], out: [] });
-  const [hoveredNode, setHoveredNode] = useState<{ layer: 'in' | 'hid' | 'out', index: number } | null>(null);
-
+// SIMULATION 2 - AI-coordinated green wave
+const AIIntersectionSim = () => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
-    if (!isLearning) return;
-    const interval = setInterval(() => {
-      setWeights(prev => prev.map(w => Math.max(-1, Math.min(1, w + (Math.random() * 0.1 - 0.05)))));
-      setBiases(prev => prev.map(b => Math.max(-1, Math.min(1, b + (Math.random() * 0.06 - 0.03)))));
-      if (Math.random() > 0.3) {
-        setActiveNodes({ hidden: [Math.floor(Math.random() * 4)], out: [Math.floor(Math.random() * 4)] });
-      }
-    }, 150);
-    return () => clearInterval(interval);
-  }, [isLearning]);
-
-  const isEdgeHighlighted = (fromLayer: 'in' | 'hid', fromIdx: number, toIdx: number) => {
-    if (!hoveredNode) return true;
-    if (hoveredNode.layer === 'in' && fromLayer === 'in' && hoveredNode.index === fromIdx) return true;
-    if (hoveredNode.layer === 'hid' && ((fromLayer === 'in' && hoveredNode.index === toIdx) || (fromLayer === 'hid' && hoveredNode.index === fromIdx))) return true;
-    if (hoveredNode.layer === 'out' && fromLayer === 'hid' && hoveredNode.index === toIdx) return true;
-    return false;
-  };
-
-  return (
-    <div className="bg-slate-800/40 backdrop-blur-md border border-slate-700/50 p-6 md:p-8 rounded-3xl shadow-xl w-full relative overflow-hidden mb-12">
-      <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-[80px] pointer-events-none"></div>
-
-      <div className="mb-6">
-        <h4 className="text-2xl font-bold text-slate-200">{title}</h4>
-        <p className="text-slate-400 text-sm mt-1">{desc}</p>
-      </div>
-
-      <div className="w-full overflow-x-auto relative z-10">
-        <div className="min-w-[900px]">
-          <svg viewBox="0 0 1000 600" className="w-full h-auto">
-            {/* Edges: Input -> Hidden */}
-            {INPUT_LABELS.map((_, i) => Array.from({ length: 4 }).map((_, j) => {
-              const w = weights[i * 4 + j];
-              const color = w > 0 ? POS_COLOR : NEG_COLOR;
-              const isHovered = isEdgeHighlighted('in', i, j);
-              const opacity = hoveredNode ? (isHovered ? 1 : 0.02) : (Math.abs(w) > 0.5 ? Math.abs(w) * 0.5 : 0.15);
-              // THE FIX: Reduced base thickness multiplier from *3 to *1.5
-              const width = hoveredNode && isHovered ? 2.5 : (Math.abs(w) * 1.5 + 0.25);
-              const x1 = 250, y1 = 155 + i * 145, x2 = 500, y2 = 110 + j * 125;
-              return (
-                <g key={`edge-in-${i}-${j}`}>
-                  <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={color} strokeWidth={width} strokeOpacity={opacity} className="transition-all duration-150 ease-linear" />
-                  {hoveredNode && isHovered && (
-                    <g transform={`translate(${(x1 + x2) / 2}, ${(y1 + y2) / 2})`}>
-                      <rect x="-20" y="-10" width="40" height="20" rx="4" fill="#0f172a" stroke={color} strokeWidth="1" opacity="0.9" />
-                      <text x="0" y="3" textAnchor="middle" fill="#f8fafc" fontSize="10" fontWeight="bold" fontFamily="monospace">{w > 0 ? '+' : ''}{w.toFixed(2)}</text>
-                    </g>
-                  )}
-                </g>
-              );
-            }))}
-
-            {/* Edges: Hidden -> Output */}
-            {Array.from({ length: 4 }).map((_, j) => OUTPUT_LABELS.map((_, k) => {
-              const w = weights[12 + j * 4 + k];
-              const color = w > 0 ? POS_COLOR : NEG_COLOR;
-              const isHovered = isEdgeHighlighted('hid', j, k);
-              const opacity = hoveredNode ? (isHovered ? 1 : 0.02) : (Math.abs(w) > 0.5 ? Math.abs(w) * 0.5 : 0.15);
-              // THE FIX: Reduced base thickness multiplier from *3 to *1.5
-              const width = hoveredNode && isHovered ? 2.5 : (Math.abs(w) * 1.5 + 0.25);
-              const x1 = 500, y1 = 110 + j * 125, x2 = 750, y2 = 110 + k * 125;
-              return (
-                <g key={`edge-out-${j}-${k}`}>
-                  <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={color} strokeWidth={width} strokeOpacity={opacity} className="transition-all duration-150 ease-linear" />
-                  {hoveredNode && isHovered && (
-                    <g transform={`translate(${(x1 + x2) / 2}, ${(y1 + y2) / 2})`}>
-                      <rect x="-20" y="-10" width="40" height="20" rx="4" fill="#0f172a" stroke={color} strokeWidth="1" opacity="0.9" />
-                      <text x="0" y="3" textAnchor="middle" fill="#f8fafc" fontSize="10" fontWeight="bold" fontFamily="monospace">{w > 0 ? '+' : ''}{w.toFixed(2)}</text>
-                    </g>
-                  )}
-                </g>
-              );
-            }))}
-
-            {/* Input Nodes (Emerald) */}
-            {INPUT_LABELS.map((label, i) => (
-              <g key={`in-${i}`} onMouseEnter={() => setHoveredNode({ layer: 'in', index: i })} onMouseLeave={() => setHoveredNode(null)} className="cursor-pointer">
-                <text x={215} y={155 + i * 145} textAnchor="end" alignmentBaseline="middle" fill={hoveredNode?.layer === 'in' && hoveredNode.index === i ? '#10b981' : '#cbd5e1'} fontSize={14} fontWeight="bold" className="transition-colors">{label}</text>
-                <circle cx={250} cy={155 + i * 145} r={22} fill="#10b981" stroke={hoveredNode?.layer === 'in' && hoveredNode.index === i ? '#ffffff' : '#0f172a'} strokeWidth={2} className="transition-all drop-shadow-md" />
-              </g>
-            ))}
-
-            {/* Hidden Nodes (Slate Grey) */}
-            {Array.from({ length: 4 }).map((_, j) => (
-              <g key={`hid-${j}`} onMouseEnter={() => setHoveredNode({ layer: 'hid', index: j })} onMouseLeave={() => setHoveredNode(null)} className="cursor-pointer">
-                {isLearning && activeNodes.hidden.includes(j) && <circle cx={500} cy={110 + j * 125} r={32} fill="#94a3b8" opacity={0.4} className="animate-pulse" />}
-                <circle cx={500} cy={110 + j * 125} r={22} fill="#64748b" stroke={hoveredNode?.layer === 'hid' && hoveredNode.index === j ? '#ffffff' : '#0f172a'} strokeWidth={2} className="transition-all drop-shadow-md" />
-                <text x={500} y={110 + j * 125 + 38} textAnchor="middle" fill="#94a3b8" fontSize={12} fontFamily="monospace" fontWeight="bold">b: {biases[j] > 0 ? '+' : ''}{biases[j].toFixed(2)}</text>
-              </g>
-            ))}
-
-            {/* Output Nodes (Emerald) */}
-            {OUTPUT_LABELS.map((label, k) => (
-              <g key={`out-${k}`} onMouseEnter={() => setHoveredNode({ layer: 'out', index: k })} onMouseLeave={() => setHoveredNode(null)} className="cursor-pointer">
-                {isLearning && activeNodes.out.includes(k) && <circle cx={750} cy={110 + k * 125} r={32} fill="#10b981" opacity={0.4} className="animate-pulse" />}
-                <circle cx={750} cy={110 + k * 125} r={22} fill="#10b981" stroke={hoveredNode?.layer === 'out' && hoveredNode.index === k ? '#ffffff' : '#0f172a'} strokeWidth={2} className="transition-all drop-shadow-md" />
-                <text x={785} y={110 + k * 125} textAnchor="start" alignmentBaseline="middle" fill={hoveredNode?.layer === 'out' && hoveredNode.index === k ? '#10b981' : '#f8fafc'} fontSize={15} fontWeight="bold" className="transition-colors">{label}</text>
-                <text x={750} y={110 + k * 125 + 38} textAnchor="middle" fill="#94a3b8" fontSize={12} fontFamily="monospace" fontWeight="bold">b: {biases[4 + k] > 0 ? '+' : ''}{biases[4 + k].toFixed(2)}</text>
-              </g>
-            ))}
-          </svg>
-        </div>
-      </div>
-    </div>
-  );
+    const canvas = canvasRef.current!;
+    const ctx = canvas.getContext('2d')!;
+    const W = canvas.width, H = canvas.height;
+    const CX = W / 2, CY = H / 2, ROAD_W = 40;
+    const cars = [
+      { x: CX - ROAD_W / 4, y: 40, dx: 0, dy: 1, arm: 'N' },
+      { x: CX + ROAD_W / 4, y: H - 40, dx: 0, dy: -1, arm: 'S' },
+      { x: 40, y: CY + ROAD_W / 4, dx: 1, dy: 0, arm: 'W' },
+      { x: W - 40, y: CY - ROAD_W / 4, dx: -1, dy: 0, arm: 'E' },
+    ];
+    let tick = 0, raf: number;
+    const draw = () => {
+      tick++;
+      const isNSGreen = Math.floor(tick / 40) % 2 === 0;
+      ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = '#334155'; ctx.fillRect(0, CY - ROAD_W, W, ROAD_W * 2);
+      ctx.fillStyle = '#334155'; ctx.fillRect(CX - ROAD_W, 0, ROAD_W * 2, H);
+      cars.forEach(car => {
+        const ns = car.arm.startsWith('N') || car.arm.startsWith('S');
+        if (ns ? isNSGreen : !isNSGreen) { car.x += car.dx * 2; car.y += car.dy * 2; }
+        if (car.x > W + 20) car.x = 40;
+        if (car.x < -20) car.x = W - 40;
+        if (car.y > H + 20) car.y = 40;
+        if (car.y < -20) car.y = H - 40;
+        ctx.save(); ctx.translate(car.x, car.y);
+        if (car.dx === 0) ctx.rotate(Math.PI / 2);
+        ctx.fillStyle = '#10b981'; ctx.beginPath(); ctx.roundRect(-10, -5, 20, 10, 2); ctx.fill();
+        ctx.restore();
+      });
+      ctx.fillStyle = '#0f172a'; ctx.fillRect(8, 8, 240, 44); ctx.strokeStyle = '#10b981'; ctx.lineWidth = 1; ctx.strokeRect(8, 8, 240, 44);
+      ctx.fillStyle = '#86efac'; ctx.font = 'bold 11px monospace'; ctx.fillText('AI-Adaptive Timing', 16, 26);
+      raf = requestAnimationFrame(draw);
+    };
+    raf = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  return <canvas ref={canvasRef} width={520} height={440} className="w-full rounded-2xl border border-slate-700 bg-slate-900" />;
 };
 
-// --- 2. Recurrent Neural Network Visualizer (System C) ---
-const RecurrentNetwork = ({ title, desc, isLearning }: { title: string, desc: string, isLearning: boolean }) => {
-  const [weights, setWeights] = useState(() => Array.from({ length: 44 }, (_, i) => Math.cos(i * 1.5) * 2 - 1));
-  const [recWeights, setRecWeights] = useState(() => Array.from({ length: 8 }, (_, i) => Math.sin(i * 3) * 2 - 1));
-  const [biases, setBiases] = useState(() => Array.from({ length: 12 }, (_, i) => Math.sin(i) * 2 - 1));
-
-  const [activeNodes, setActiveNodes] = useState<{ h1: number[], h2: number[], out: number[] }>({ h1: [], h2: [], out: [] });
-  const [hoveredNode, setHoveredNode] = useState<{ layer: 'in' | 'h1' | 'h2' | 'out', index: number } | null>(null);
-
+// ML Gradient Descent Simulation
+const MLGradientSim = () => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [lr, setLr] = useState(0.3);
+  const ballRef = useRef({ x: 50 });
   useEffect(() => {
-    if (!isLearning) return;
-    const interval = setInterval(() => {
-      setWeights(prev => prev.map(w => Math.max(-1, Math.min(1, w + (Math.random() * 0.1 - 0.05)))));
-      setRecWeights(prev => prev.map(w => Math.max(-1, Math.min(1, w + (Math.random() * 0.1 - 0.05)))));
-      setBiases(prev => prev.map(b => Math.max(-1, Math.min(1, b + (Math.random() * 0.06 - 0.03)))));
-      if (Math.random() > 0.3) {
-        setActiveNodes({ h1: [Math.floor(Math.random() * 4)], h2: [Math.floor(Math.random() * 4)], out: [Math.floor(Math.random() * 4)] });
-      }
-    }, 150);
-    return () => clearInterval(interval);
-  }, [isLearning]);
-
-  const isEdgeHighlighted = (fromLayer: 'in' | 'h1' | 'h2', fromIdx: number, toIdx: number) => {
-    if (!hoveredNode) return true;
-    if (hoveredNode.layer === 'in' && fromLayer === 'in' && hoveredNode.index === fromIdx) return true;
-    if (hoveredNode.layer === 'h1' && ((fromLayer === 'in' && hoveredNode.index === toIdx) || (fromLayer === 'h1' && hoveredNode.index === fromIdx))) return true;
-    if (hoveredNode.layer === 'h2' && ((fromLayer === 'h1' && hoveredNode.index === toIdx) || (fromLayer === 'h2' && hoveredNode.index === fromIdx))) return true;
-    if (hoveredNode.layer === 'out' && fromLayer === 'h2' && hoveredNode.index === toIdx) return true;
-    return false;
-  };
-
-  const isLoopHighlighted = (layer: 'h1' | 'h2', idx: number) => {
-    if (!hoveredNode) return true;
-    return hoveredNode.layer === layer && hoveredNode.index === idx;
-  };
-
-  const drawEdges = (startX: number, endX: number, startLayer: 'in' | 'h1' | 'h2', weightOffset: number, fromCount: number, toCount: number) => {
-    return Array.from({ length: fromCount }).map((_, j) => Array.from({ length: toCount }).map((_, k) => {
-      const w = weights[weightOffset + j * toCount + k];
-      const color = w > 0 ? POS_COLOR : NEG_COLOR;
-      const isHovered = isEdgeHighlighted(startLayer, j, k);
-      const opacity = hoveredNode ? (isHovered ? 1 : 0.02) : (Math.abs(w) > 0.5 ? Math.abs(w) * 0.5 : 0.15);
-      // THE FIX: Reduced base thickness multiplier from *3 to *1.5
-      const width = hoveredNode && isHovered ? 2.5 : (Math.abs(w) * 1.5 + 0.25);
-      const y1 = startLayer === 'in' ? 155 + j * 145 : 110 + j * 125;
-      const y2 = 110 + k * 125;
-      return (
-        <g key={`edge-${startLayer}-${j}-${k}`}>
-          <line x1={startX} y1={y1} x2={endX} y2={y2} stroke={color} strokeWidth={width} strokeOpacity={opacity} className="transition-all duration-150 ease-linear" />
-        </g>
-      );
-    }));
-  };
-
-  const drawRecurrentLoops = (cx: number, layer: 'h1' | 'h2', weightOffset: number) => {
-    return Array.from({ length: 4 }).map((_, j) => {
-      const w = recWeights[weightOffset + j];
-      const color = w > 0 ? '#38bdf8' : '#818cf8';
-      const isHovered = isLoopHighlighted(layer, j);
-      const opacity = hoveredNode ? (isHovered ? 1 : 0.05) : (Math.abs(w) > 0.5 ? Math.abs(w) * 0.8 : 0.3);
-      // THE FIX: Reduced base loop thickness multiplier
-      const width = hoveredNode && isHovered ? 3 : (Math.abs(w) * 1.5 + 0.75);
-      const cy = 110 + j * 125;
-      const pathData = `M ${cx - 8} ${cy - 20} C ${cx - 40} ${cy - 70}, ${cx + 40} ${cy - 70}, ${cx + 8} ${cy - 20}`;
-
-      return (
-        <g key={`loop-${layer}-${j}`}>
-          <path d={pathData} fill="none" stroke={color} strokeWidth={width} strokeOpacity={opacity} className="transition-all duration-150 ease-linear" strokeDasharray="4 2" />
-          {hoveredNode && isHovered && (
-            <g transform={`translate(${cx}, ${cy - 60})`}>
-              <rect x="-20" y="-10" width="40" height="20" rx="4" fill="#0f172a" stroke={color} strokeWidth="1" opacity="0.9" />
-              <text x="0" y="3" textAnchor="middle" fill="#f8fafc" fontSize="10" fontWeight="bold" fontFamily="monospace">{w > 0 ? '+' : ''}{w.toFixed(2)}</text>
-            </g>
-          )}
-        </g>
-      );
-    });
-  };
-
+    const canvas = canvasRef.current!;
+    const ctx = canvas.getContext('2d')!;
+    const W = canvas.width, H = canvas.height;
+    let raf: number;
+    const getY = (x: number) => 0.7 * Math.pow(x / W - 0.5, 2) * H + 40;
+    const draw = () => {
+      ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, W, H);
+      ctx.strokeStyle = '#10b981'; ctx.lineWidth = 3; ctx.beginPath();
+      for (let x = 0; x <= W; x++) { if (x === 0) ctx.moveTo(x, getY(x)); else ctx.lineTo(x, getY(x)); }
+      ctx.stroke();
+      const bX = ballRef.current.x;
+      const slope = (getY(bX + 1) - getY(bX - 1));
+      ballRef.current.x += -slope * lr * 2;
+      ctx.fillStyle = '#06b6d4'; ctx.beginPath(); ctx.arc(bX, getY(bX), 8, 0, Math.PI * 2); ctx.fill();
+      raf = requestAnimationFrame(draw);
+    };
+    raf = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(raf);
+  }, [lr]);
   return (
-    <div className="bg-slate-800/40 backdrop-blur-md border border-slate-700/50 p-6 md:p-8 rounded-3xl shadow-xl w-full relative overflow-hidden mb-12">
-      <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/5 rounded-full blur-[80px] pointer-events-none"></div>
+    <div className="bg-slate-800/40 border border-slate-700 rounded-2xl p-4">
+      <canvas ref={canvasRef} width={640} height={200} className="w-full mb-4" />
+      <input type="range" min={0.05} max={0.9} step={0.05} value={lr} onChange={e => { setLr(+e.target.value); ballRef.current.x = 50; }} className="w-full accent-cyan-400" />
+      <p className="text-xs text-slate-500 mt-2 font-mono">Roll the ball to the bottom by adjusting "Learning Rate".</p>
+    </div>
+  );
+};
 
-      <div className="mb-6">
-        <h4 className="text-2xl font-bold text-slate-200">{title}</h4>
-        <p className="text-slate-400 text-sm mt-1">{desc}</p>
+// ANN Deep Simulation
+const ANNDeepSim = () => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [running, setRunning] = useState(false);
+  useEffect(() => {
+    const canvas = canvasRef.current!;
+    const ctx = canvas.getContext('2d')!;
+    const W = canvas.width, H = canvas.height;
+    let tick = 0, raf: number;
+    const draw = () => {
+      tick++;
+      ctx.fillStyle = '#0a0f1a'; ctx.fillRect(0, 0, W, H);
+      const pulse = (tick % 60) / 60;
+      ctx.strokeStyle = '#10b981'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(100, 100); ctx.lineTo(300, 100); ctx.stroke();
+      ctx.fillStyle = '#10b981'; ctx.beginPath(); ctx.arc(100 + 200 * pulse, 100, 4, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#1e293b'; ctx.beginPath(); ctx.arc(100, 100, 20, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(300, 100, 20, 0, Math.PI * 2); ctx.fill();
+      raf = requestAnimationFrame(draw);
+    };
+    raf = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(raf);
+  }, [running]);
+  return (
+    <div className="bg-slate-800/40 border border-slate-700 rounded-2xl overflow-hidden">
+      <canvas ref={canvasRef} width={680} height={200} className="w-full" />
+      <button onClick={() => setRunning(!running)} className="m-4 px-4 py-2 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-lg font-bold uppercase text-xs">
+        {running ? "Stop" : "Start Training"}
+      </button>
+    </div>
+  );
+};
+
+// RL Car Simulation
+const RLCarSim = () => {
+  const [step, setStep] = useState(0);
+  const [reward, setReward] = useState(0);
+  const act = (choice: string) => {
+    if (choice === 'brake') setReward(r => r + 1);
+    setStep(s => (s + 1) % 4);
+  };
+  return (
+    <div className="bg-slate-800/40 border border-slate-700 rounded-2xl p-6">
+      <div className="h-12 bg-slate-700 rounded mb-4 flex items-center px-4">
+        <div className="text-2xl transition-all" style={{ marginLeft: `${step * 25}%` }}>🚗</div>
       </div>
+      <div className="flex gap-2">
+        <button onClick={() => act('gas')} className="flex-1 py-2 bg-emerald-600/20 text-emerald-400 rounded border border-emerald-600/30 font-bold">Gas</button>
+        <button onClick={() => act('brake')} className="flex-1 py-2 bg-amber-600/20 text-amber-400 rounded border border-amber-600/30 font-bold">Brake</button>
+      </div>
+      <div className="mt-4 font-mono text-xs text-slate-500">Reward: {reward}</div>
+    </div>
+  );
+};
 
-      <div className="w-full relative z-10">
-        <div className="w-full">
-          <svg viewBox="0 0 1350 600" className="w-full h-auto">
-            {drawEdges(200, 500, 'in', 0, 3, 4)}
-            {drawEdges(500, 800, 'h1', 12, 4, 4)}
-            {drawEdges(800, 1100, 'h2', 28, 4, 4)}
+// MARL Intersection Simulation
+const MARLIntersectionSim = () => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const canvas = canvasRef.current!;
+    const ctx = canvas.getContext('2d')!;
+    const W = canvas.width, H = canvas.height;
+    let tick = 0, raf: number;
+    const draw = () => {
+      tick++; ctx.fillStyle = '#0a0f1a'; ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = '#10b981'; ctx.font = 'bold 10px monospace';
+      ctx.fillText(`Agent 1 telling Agent 2 about incoming wave...`, 10, 20);
+      raf = requestAnimationFrame(draw);
+    };
+    raf = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  return <canvas ref={canvasRef} width={640} height={100} className="w-full rounded-xl border border-slate-700 bg-slate-900" />;
+};
 
-            {drawRecurrentLoops(500, 'h1', 0)}
-            {drawRecurrentLoops(800, 'h2', 4)}
+// QMIX Flow Simulation
+const QMIXFlowSim = () => {
+  const [ph, setPh] = useState(0);
+  const phases = ["Drive", "Observe", "ANN", "Mixer", "Reward", "Backprop"];
+  return (
+    <div className="bg-slate-800/40 border border-slate-700 rounded-2xl p-6">
+      <div className="flex justify-between mb-6">
+        {phases.map((p, i) => (
+          <div key={p} className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold border transition-all ${i <= ph ? 'bg-emerald-500 text-slate-900 border-emerald-400' : 'bg-slate-800 text-slate-600 border-slate-700'}`}>{i+1}</div>
+        ))}
+      </div>
+      <div className="text-white font-bold mb-2">{phases[ph]} Phase</div>
+      <p className="text-slate-400 text-sm mb-4">Step-by-step processing of the QMIX architecture.</p>
+      <button onClick={() => setPh((ph + 1) % 6)} className="px-4 py-2 bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-lg text-xs font-bold uppercase transition-all">Next Step</button>
+    </div>
+  );
+};
 
-            {INPUT_LABELS.map((label, i) => (
-              <g key={`in-${i}`} onMouseEnter={() => setHoveredNode({ layer: 'in', index: i })} onMouseLeave={() => setHoveredNode(null)} className="cursor-pointer">
-                <text x={165} y={155 + i * 145} textAnchor="end" alignmentBaseline="middle" fill={hoveredNode?.layer === 'in' && hoveredNode.index === i ? '#10b981' : '#cbd5e1'} fontSize={14} fontWeight="bold" className="transition-colors">{label}</text>
-                <circle cx={200} cy={155 + i * 145} r={22} fill="#10b981" stroke={hoveredNode?.layer === 'in' && hoveredNode.index === i ? '#ffffff' : '#0f172a'} strokeWidth={2} className="transition-all drop-shadow-md" />
-              </g>
-            ))}
-
-            {Array.from({ length: 4 }).map((_, j) => (
-              <g key={`h1-${j}`} onMouseEnter={() => setHoveredNode({ layer: 'h1', index: j })} onMouseLeave={() => setHoveredNode(null)} className="cursor-pointer">
-                {isLearning && activeNodes.h1.includes(j) && <circle cx={500} cy={110 + j * 125} r={32} fill="#94a3b8" opacity={0.4} className="animate-pulse" />}
-                <circle cx={500} cy={110 + j * 125} r={22} fill="#64748b" stroke={hoveredNode?.layer === 'h1' && hoveredNode.index === j ? '#ffffff' : '#0f172a'} strokeWidth={2} className="transition-all drop-shadow-md" />
-                <text x={500} y={110 + j * 125 + 38} textAnchor="middle" fill="#94a3b8" fontSize={12} fontFamily="monospace" fontWeight="bold">b: {biases[j].toFixed(2)}</text>
-              </g>
-            ))}
-
-            {Array.from({ length: 4 }).map((_, j) => (
-              <g key={`h2-${j}`} onMouseEnter={() => setHoveredNode({ layer: 'h2', index: j })} onMouseLeave={() => setHoveredNode(null)} className="cursor-pointer">
-                {isLearning && activeNodes.h2.includes(j) && <circle cx={800} cy={110 + j * 125} r={32} fill="#94a3b8" opacity={0.4} className="animate-pulse" />}
-                <circle cx={800} cy={110 + j * 125} r={22} fill="#64748b" stroke={hoveredNode?.layer === 'h2' && hoveredNode.index === j ? '#ffffff' : '#0f172a'} strokeWidth={2} className="transition-all drop-shadow-md" />
-                <text x={800} y={110 + j * 125 + 38} textAnchor="middle" fill="#94a3b8" fontSize={12} fontFamily="monospace" fontWeight="bold">b: {biases[4 + j].toFixed(2)}</text>
-              </g>
-            ))}
-
-            {OUTPUT_LABELS.map((label, k) => (
-              <g key={`out-${k}`} onMouseEnter={() => setHoveredNode({ layer: 'out', index: k })} onMouseLeave={() => setHoveredNode(null)} className="cursor-pointer">
-                {isLearning && activeNodes.out.includes(k) && <circle cx={1100} cy={110 + k * 125} r={32} fill="#10b981" opacity={0.4} className="animate-pulse" />}
-                <circle cx={1100} cy={110 + k * 125} r={22} fill="#10b981" stroke={hoveredNode?.layer === 'out' && hoveredNode.index === k ? '#ffffff' : '#0f172a'} strokeWidth={2} className="transition-all drop-shadow-md" />
-                <text x={1135} y={110 + k * 125} textAnchor="start" alignmentBaseline="middle" fill={hoveredNode?.layer === 'out' && hoveredNode.index === k ? '#10b981' : '#f8fafc'} fontSize={15} fontWeight="bold" className="transition-colors">{label}</text>
-                <text x={1100} y={110 + k * 125 + 38} textAnchor="middle" fill="#94a3b8" fontSize={12} fontFamily="monospace" fontWeight="bold">b: {biases[8 + k].toFixed(2)}</text>
-              </g>
-            ))}
-
-            <text x={200} y={30} textAnchor="middle" fill="#cbd5e1" fontSize={14} fontWeight="bold" className="uppercase tracking-widest">Input State</text>
-            <text x={500} y={30} textAnchor="middle" fill="#cbd5e1" fontSize={14} fontWeight="bold" className="uppercase tracking-widest">Hidden Layer 1 (Recurrent)</text>
-            <text x={800} y={30} textAnchor="middle" fill="#cbd5e1" fontSize={14} fontWeight="bold" className="uppercase tracking-widest">Hidden Layer 2 (Recurrent)</text>
-            <text x={1100} y={30} textAnchor="middle" fill="#cbd5e1" fontSize={14} fontWeight="bold" className="uppercase tracking-widest">Action Logits</text>
-          </svg>
+// Results Scoreboard
+const Scoreboard = () => {
+  const data = [
+    { name: "Indian Standard", val: -1.53, color: "#ef4444" },
+    { name: "QMIX Our Model", val: -0.40, color: "#10b981" }
+  ];
+  return (
+    <div className="bg-slate-800/40 border border-slate-700 rounded-2xl p-6">
+      {data.map(d => (
+        <div key={d.name} className="mb-4">
+          <div className="flex justify-between text-xs font-bold text-slate-400 mb-1">
+            <span>{d.name}</span>
+            <span style={{ color: d.color }}>{d.val}</span>
+          </div>
+          <div className="h-2 bg-slate-900 rounded-full overflow-hidden">
+            <div className="h-full transition-all duration-1000" style={{ width: `${(Math.abs(d.val) / 2) * 100}%`, backgroundColor: d.color }} />
+          </div>
         </div>
-      </div>
+      ))}
     </div>
   );
 };
 
-// --- Master Dashboard Controller ---
-const MultiAgentDashboard = () => {
-  const [isLearning, setIsLearning] = useState(false);
-
-  return (
-    <div className="w-full flex flex-col items-center">
-      <div className="flex flex-col items-center mb-12 relative z-10 w-full max-w-4xl bg-slate-800/60 backdrop-blur-xl border border-slate-700/50 p-8 rounded-3xl shadow-2xl">
-        <h3 className="text-3xl md:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400 tracking-wide mb-3 text-center">
-          Multi-Agent Simulation Core
-        </h3>
-        <p className="text-slate-400 text-sm mb-8 uppercase tracking-widest font-semibold text-center max-w-xl">
-          Simultaneously comparing localized reinforcement learning policies against long-term memory models. Hover over nodes to inspect deep parameters.
-        </p>
-
-        <button
-          onClick={() => setIsLearning(!isLearning)}
-          className={`px-10 py-4 rounded-xl font-black tracking-widest text-sm uppercase transition-all duration-300 ${isLearning
-              ? 'bg-rose-500/10 text-rose-400 border border-rose-500/50 hover:bg-rose-500/20 shadow-[0_0_30px_rgba(244,63,94,0.2)]'
-              : 'bg-emerald-500 text-slate-950 hover:bg-emerald-400 hover:-translate-y-1 shadow-[0_0_30px_rgba(16,185,129,0.4)]'
-            }`}
-        >
-          {isLearning ? 'Halt Global Training Feed' : 'Initiate Simultaneous Live Training'}
-        </button>
-      </div>
-
-      <FeedforwardNetwork
-        title="Model A: Baseline QMIX Policy"
-        desc="Standard feedforward architecture optimizing for immediate queue reduction."
-        isLearning={isLearning}
-        seed={1}
-      />
-      <FeedforwardNetwork
-        title="Model B: Aggressive Throughput Policy"
-        desc="Alternative weight initialization demonstrating a learned preference for extending existing green phases."
-        isLearning={isLearning}
-        seed={42}
-      />
-      <RecurrentNetwork
-        title="Model C: 2-Layer LSTM Predictive Model"
-        desc="Deep recurrent architecture. The dotted blue feedback loops allow the network to 'remember' past signal states and predict incoming traffic waves."
-        isLearning={isLearning}
-      />
-    </div>
-  );
-};
-
-// --- Main Page Export ---
+// Main Export
 export default function About() {
   return (
-    <div className="w-full max-w-7xl mx-auto py-12 flex flex-col gap-32">
+    <div className="w-full max-w-4xl mx-auto flex flex-col gap-24 py-12 px-4 bg-slate-900 text-slate-200 font-sans">
       <ScrollReveal>
-        <section className="text-center flex flex-col items-center">
-          <h2 className="text-5xl md:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400 tracking-tight mb-10">
-            About Our Project
-          </h2>
-          <p className="text-slate-300 text-xl leading-relaxed max-w-5xl">
-            We are pioneering the future of urban mobility with an AI-driven traffic management system designed to optimize signal timings and reduce congestion in cities. Leveraging real-time data from cameras and IoT sensors, our platform uses cutting-edge computer vision and reinforcement learning technologies to predict bottlenecks and adapt traffic flow dynamically.
-          </p>
-        </section>
+        <div className="text-center">
+          <Badge>SIH 2025 - QMIX v2.0</Badge>
+          <H2>How Our AI Manages Traffic</H2>
+          <Prose>A step-by-step guide to the future of urban mobility.</Prose>
+        </div>
       </ScrollReveal>
 
       <ScrollReveal>
-        <MultiAgentDashboard />
+        <div>
+          <Badge>Problem</Badge>
+          <H2>The Indian Traffic Problem</H2>
+          <Prose className="mb-6">Fixed timers cause massive congestion. Our benchmark uses Webster's Method calculated according to IRC:93-1985 standards.</Prose>
+          <IndianIntersectionSim />
+        </div>
       </ScrollReveal>
 
       <ScrollReveal>
-        <section className="flex flex-col items-center text-center max-w-4xl mx-auto mt-20">
-          <h3 className="text-4xl font-bold text-slate-200 mb-6">Our Mission</h3>
-          <p className="text-slate-400 text-xl leading-relaxed">
-            To develop an AI-driven traffic management system that leverages real-time data from cameras and IoT sensors to optimize traffic signals, reduce congestion, and improve the daily commuting experience in urban areas.
-          </p>
-        </section>
+        <div>
+          <Badge>Solution</Badge>
+          <H2>AI-Adaptive Coordination</H2>
+          <Prose className="mb-6">Our model doesn't just watch; it remembers trends using GRU cells and communicates across intersections.</Prose>
+          <AIIntersectionSim />
+        </div>
       </ScrollReveal>
 
       <ScrollReveal>
-        <section className="flex flex-col items-center text-center max-w-4xl mx-auto pb-20">
-          <h3 className="text-4xl font-bold text-slate-200 mb-6">Our Vision</h3>
-          <p className="text-slate-400 text-xl leading-relaxed">
-            To build smarter, safer, and more sustainable cities by transforming traditional traffic control into an intelligent, adaptive ecosystem that minimizes travel time, lowers emissions, and enhances quality of life for all citizens.
-          </p>
-        </section>
+        <div>
+          <Badge>ML Basics</Badge>
+          <H2>Learning from Mistakes</H2>
+          <Prose className="mb-6">Machine learning is gradient descent - finding the lowest loss by nudging weights.</Prose>
+          <MLGradientSim />
+        </div>
+      </ScrollReveal>
+
+      <ScrollReveal>
+        <div>
+          <Badge>Networks</Badge>
+          <H2>Neural Architecture</H2>
+          <Prose className="mb-6">Data flows forward to predict, and errors flow backward to improve.</Prose>
+          <ANNDeepSim />
+        </div>
+      </ScrollReveal>
+
+      <ScrollReveal>
+        <div>
+          <Badge>Training</Badge>
+          <H2>Reinforcement Learning</H2>
+          <Prose className="mb-6">The agent learns through trial and error, getting rewards for fluid traffic and penalties for jams.</Prose>
+          <RLCarSim />
+        </div>
+      </ScrollReveal>
+
+      <ScrollReveal>
+        <div>
+          <Badge>Coordination</Badge>
+          <H2>Multi-Agent Systems (MARL)</H2>
+          <Prose className="mb-6">Agents tell each other about incoming traffic waves to synchronize lights city-wide.</Prose>
+          <MARLIntersectionSim />
+        </div>
+      </ScrollReveal>
+
+      <ScrollReveal>
+        <div>
+          <Badge>QMIX</Badge>
+          <H2>The QMIX Pipeline</H2>
+          <QMIXFlowSim />
+        </div>
+      </ScrollReveal>
+
+      <ScrollReveal>
+        <div>
+          <Badge>Performance</Badge>
+          <H2>Our Results</H2>
+          <Prose className="mb-6">Our model is 3.8x better than the benchmark standard.</Prose>
+          <Scoreboard />
+        </div>
       </ScrollReveal>
     </div>
   );
