@@ -1,14 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<!-- generated on 2025-09-14 10:41:09.116686 by randomTrips.py v1_24_0+0000-b72eb3fabc8
-<configuration>
-    <net-file value="connaught_place.net.xml"/>
-    <output-trip-file value="connaught_place.rou.xml"/>
-    <end value="200.0"/>
-</configuration>
--->
-
 <routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/routes_file.xsd">
+    
+    <vType id="ambulanceType" vClass="emergency" guiShape="emergency" color="red" maxSpeed="30.0" speedFactor="1.5" />
+
     <trip id="0" depart="0.00" from="391534135#2" to="-1121139432#0"/>
     <trip id="1" depart="1.00" from="-707566696#2" to="-562499724#5"/>
     <trip id="2" depart="2.00" from="563791811#5" to="561672574#1"/>
@@ -59,7 +54,9 @@
     <trip id="47" depart="47.00" from="561672577#0" to="24582921#8"/>
     <trip id="48" depart="48.00" from="-700293880#0" to="423553702#1"/>
     <trip id="49" depart="49.00" from="-24582918#3" to="142216383"/>
-    <trip id="50" depart="50.00" from="154356520#1" to="995792405"/>
+    
+    <trip id="amb_1" type="ambulanceType" depart="50.00" from="154356520#1" to="995792405"/>
+
     <trip id="51" depart="51.00" from="706373643" to="-707566696#2"/>
     <trip id="52" depart="52.00" from="24577480#2" to="-38699586#1"/>
     <trip id="53" depart="53.00" from="720546573#7" to="700293878#1"/>
