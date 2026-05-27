@@ -100,9 +100,9 @@ sys.modules['core.envs.sumo_env'].SUMOEnv = AmbulancePriorityEnv
 
 if __name__ == "__main__":
     
-    config_path = os.path.join(current_dir, "config", "v2.0.yaml")
+    config_path = os.path.join(current_dir, "config", "v4.0.yaml")
     with open(config_path, 'r') as f:
         args = SimpleNamespace(**yaml.safe_load(f))
          
-    benchmark.run_v2(args, task="train", config_id="ambulance_v1")
+    benchmark.run_v4(args, task="train", config_id="ambulance_v1")
     
