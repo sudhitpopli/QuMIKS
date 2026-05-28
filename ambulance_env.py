@@ -161,12 +161,14 @@ class AmbulancePriorityEnv(SUMOEnv):
         
         amb_speed, amb_halted, ambulance_penalty = self._process_ambulance_logic()
         
-        active_vehicles = traci.vehicle.getIDList()
-        civilian_halt_count = sum(
-            1 for v in active_vehicles 
-            if traci.vehicle.getVehicleClass(v) != "emergency" and traci.vehicle.getSpeed(v) < 0.1
-        )
-        self.cumulative_civilian_halts += civilian_halt_count
+        try:
+
+            total_halted = traci.simulation.getHaltingNumber()
+
+            civilian_halt_count = max(0, total_halted - int(amb_halted))
+            self.cumulative_civilian_halts += civilian_halt_count
+        except traci.exceptions.TraCIException:
+            pass
         
         aug_next_state = self._augment_state(next_state, amb_speed, amb_halted)
         aug_next_obs = self._augment_obs(next_obs, amb_speed, amb_halted)
