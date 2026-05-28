@@ -6,7 +6,7 @@ import os
 # --- Configuration ---
 NUM_AMBULANCES_MIN = 1
 NUM_AMBULANCES_MAX = 4
-OUTPUT_DIR = '/content/QuMIKS/maps'
+OUTPUT_DIR = 'maps'
 NET_FILE_NAME = 'connaught_place.net.xml'
 BASE_ROUTE_FILE_NAME = 'connaught_place.rou.xml' # To extract existing edge IDs
 AMBULANCE_ROUTE_FILE_NAME = 'ambulance_routes.rou.xml'

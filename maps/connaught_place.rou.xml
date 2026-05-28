@@ -55,7 +55,6 @@
     <trip id="48" depart="48.00" from="-700293880#0" to="423553702#1"/>
     <trip id="49" depart="49.00" from="-24582918#3" to="142216383"/>
     
-    <trip id="amb_1" type="ambulanceType" depart="50.00" from="154356520#1" to="995792405"/>
 
     <trip id="51" depart="51.00" from="706373643" to="-707566696#2"/>
     <trip id="52" depart="52.00" from="24577480#2" to="-38699586#1"/>
