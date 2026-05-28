@@ -163,10 +163,27 @@ class AmbulancePriorityEnv(SUMOEnv):
         
         try:
 
-            total_halted = traci.simulation.getHaltingNumber()
+            if len(self.light_cycle_log) <= 1 or not hasattr(self, 'veh_class_cache'):
+                self.veh_class_cache = {}
+                
+            current_step = int(traci.simulation.getTime())
+            
 
-            civilian_halt_count = max(0, total_halted - int(amb_halted))
-            self.cumulative_civilian_halts += civilian_halt_count
+            if current_step % 10 == 0:
+                active_vehicles = traci.vehicle.getIDList()
+                halts = 0
+                
+                for v in active_vehicles:
+
+                    if v not in self.veh_class_cache:
+                        self.veh_class_cache[v] = traci.vehicle.getVehicleClass(v)
+                        
+
+                    if self.veh_class_cache[v] != "emergency" and traci.vehicle.getSpeed(v) < 0.1:
+                        halts += 1
+                        
+
+                self.cumulative_civilian_halts += (halts * 10)
         except traci.exceptions.TraCIException:
             pass
         
