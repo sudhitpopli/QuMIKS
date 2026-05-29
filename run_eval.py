@@ -32,4 +32,14 @@ if __name__ == "__main__":
     print("Ensure your .pt file is in models/v4/ambulance_v1/")
     print("="*50 + "\n")
     
-    benchmark.run_v4(args, task="eval", config_id="ambulance_v1")
+    benchmark.run_v4(args, task="eval", config_id="ambulance_v4_balanced")
+    
+    print("\n" + "🏆 V4 Model 🏆")
+    print("-" * 55)
+    if hasattr(args, 'last_results'):
+        results = args.last_results
+        print(f"🚑 Total Ambulance Travel Time:  {results.get('travel_time', 0)} seconds")
+        print(f"🚗 Avg Civilian Cars Halted:     {results.get('avg_civilian_halted', 0)} cars/sec")
+    else:
+        print("❌ Metrics not found! Ensure the episode finished completely.")
+    print("-" * 55 + "\n")

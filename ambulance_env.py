@@ -199,7 +199,8 @@ class AmbulancePriorityEnv(SUMOEnv):
             
             self.args.last_results = {
                 "travel_time": self.amb_active_time,
-                "cycles": self.light_cycle_log
+                "cycles": self.light_cycle_log,
+                "avg_civilian_halted": self.avg_halted_civilians_per_sec
             }
 
         return aug_next_state, aug_next_obs, custom_reward, done, info

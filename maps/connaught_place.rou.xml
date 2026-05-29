@@ -1,7 +1,6 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/routes_file.xsd">
     
-    <vType id="ambulanceType" vClass="emergency" guiShape="emergency" color="red" maxSpeed="30.0" speedFactor="1.5" />
 
     <trip id="0" depart="0.00" from="391534135#2" to="-1121139432#0" />
     <trip id="1" depart="1.00" from="-707566696#2" to="-562499724#5" />
