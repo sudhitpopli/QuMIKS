@@ -24,7 +24,7 @@ if __name__ == "__main__":
         args = SimpleNamespace(**yaml.safe_load(f))
         
 
-    args.gui = True 
+    args.gui = False 
     
 
     args.task = "eval" 

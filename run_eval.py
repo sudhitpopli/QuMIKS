@@ -11,7 +11,7 @@ sys.path.append(src_path)
 
 import benchmark
 
-from custom_train import AmbulancePriorityEnv
+from ambulance_env import AmbulancePriorityEnv
 
 sys.modules['core.envs.sumo_env'].SUMOEnv = AmbulancePriorityEnv
 
@@ -23,8 +23,10 @@ if __name__ == "__main__":
         args = SimpleNamespace(**yaml.safe_load(f))
         
 
-    args.gui = True 
-    args.sumo_cmd = sumolib.checkBinary('sumo-gui')
+    args.gui = False 
+    args.sumo_cmd = sumolib.checkBinary('sumo')
+    args.sumocfg = os.path.join(current_dir, "maps", "ambulance_simulation.sumocfg")
+    args.task = "eval"
     
     print("\n" + "="*50)
     print("🚑 LAUNCHING AI EVALUATION MODE")

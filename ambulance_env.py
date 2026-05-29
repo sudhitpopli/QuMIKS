@@ -15,8 +15,26 @@ class AmbulancePriorityEnv(SUMOEnv):
 
         if getattr(args, 'gui', False) or getattr(args, 'render', False):
             args.sumo_cmd = sumolib.checkBinary('sumo-gui')
+            if hasattr(args, 'env_args'):
+                if isinstance(args.env_args, dict):
+                    args.env_args['use_gui'] = True
+                else:
+                    args.env_args.use_gui = True
         else:
             args.sumo_cmd = sumolib.checkBinary('sumo')
+            if hasattr(args, 'env_args'):
+                if isinstance(args.env_args, dict):
+                    args.env_args['use_gui'] = False
+                else:
+                    args.env_args.use_gui = False
+
+        if hasattr(args, 'sumocfg') and args.sumocfg:
+            if not hasattr(args, 'env_args') or args.env_args is None:
+                args.env_args = {}
+            if isinstance(args.env_args, dict):
+                args.env_args['cfg_path'] = args.sumocfg
+            else:
+                args.env_args.cfg_path = args.sumocfg
             
         super().__init__(args)
         self.args = args
@@ -202,5 +220,6 @@ class AmbulancePriorityEnv(SUMOEnv):
                 "cycles": self.light_cycle_log,
                 "avg_civilian_halted": self.avg_halted_civilians_per_sec
             }
+            print("DONE!!!!!!!!!!")
 
         return aug_next_state, aug_next_obs, custom_reward, done, info
