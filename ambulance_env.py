@@ -195,7 +195,7 @@ class AmbulancePriorityEnv(SUMOEnv):
 
         if done:
             sim_length = max(1, traci.simulation.getTime())
-            avg_halted_civilians_per_sec = self.cumulative_civilian_halts / sim_length
+            self.avg_halted_civilians_per_sec = self.cumulative_civilian_halts / sim_length
             
             self.args.last_results = {
                 "travel_time": self.amb_active_time,
