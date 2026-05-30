@@ -38,14 +38,15 @@ class AmbulancePriorityEnv(SUMOEnv):
             
         super().__init__(args)
         self.args = args
-        
+
+        self.episode_counter = 0
 
         dummy_state, dummy_obs = super().reset()
         self.obs_size = len(dummy_obs[0]) + 2
         self._new_state_size = len(dummy_state) + 2
         
 
-        self.patient_priority_weight = 50.0 
+        self.patient_priority_weight = 15.0 
         self.amb_active_time = 0
         self.amb_spawned_yet = False
         self.amb_finished = False
@@ -119,7 +120,7 @@ class AmbulancePriorityEnv(SUMOEnv):
             else:
                 self.amb_halt_time = 0
 
-            final_calculated_penalty = total_base_penalty * max(1, self.amb_halt_time)
+            final_calculated_penalty = total_base_penalty 
             return max_speed, max_halted, final_calculated_penalty
 
         except traci.exceptions.FatalTraCIError:
@@ -146,9 +147,14 @@ class AmbulancePriorityEnv(SUMOEnv):
         is_api_dispatch = hasattr(self.args, 'app_dispatch') and self.args.app_dispatch is not None
 
         if not is_api_dispatch and getattr(self.args, 'task', 'train') == 'train':
-            os.system("python gen_sumo_config.py")
-
-            self.patient_priority_weight = random.choice([150.0, 250.0, 400.0])
+            # Check if it's the 0th, 50th, 100th, etc. episode
+            if self.episode_counter % 50 == 0:
+                os.system("python gen_sumo_config.py")
+                self.patient_priority_weight = random.choice([2.0, 5.0, 15.0])
+                print(f"\n[INFO] Generated new SUMO config for Episode {self.episode_counter}")
+            
+            # Increment the counter for the next reset
+            self.episode_counter += 1
 
         state, obs = super().reset()
 
