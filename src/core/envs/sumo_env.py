@@ -562,7 +562,7 @@ class SUMOEnv(MultiAgentEnv):
                 
                 n_veh = max(1, self._get_vehicle_count())
                 reward = -(total_wait / n_veh)
-                return np.clip(reward, -10, 0)
+                return np.clip(reward, -50, 0)
             
         except Exception as e:
             print(f"Error computing reward: {e}")

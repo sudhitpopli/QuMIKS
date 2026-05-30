@@ -150,7 +150,7 @@ class AmbulancePriorityEnv(SUMOEnv):
             # Check if it's the 0th, 50th, 100th, etc. episode
             if self.episode_counter % 50 == 0:
                 os.system("python gen_sumo_config.py")
-                self.patient_priority_weight = random.choice([2.0, 5.0, 15.0])
+                self.patient_priority_weight = random.choice([0.2, 0.5, 1.5])
                 print(f"\n[INFO] Generated new SUMO config for Episode {self.episode_counter}")
             
             # Increment the counter for the next reset
