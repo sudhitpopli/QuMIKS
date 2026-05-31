@@ -271,7 +271,7 @@ class QMIXTrainerV4:
 
     def load_model(self, path):
         if os.path.exists(path):
-            checkpoint = th.load(path)
+            checkpoint = th.load(path,map_location=th.device('cpu'))
             self.agent.load_state_dict(checkpoint['agent'])
             self.mixer.load_state_dict(checkpoint['mixer'])
             return True
