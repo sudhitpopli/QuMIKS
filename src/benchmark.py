@@ -177,7 +177,7 @@ def run_v2(args, task="train"):
 
     for ep in range(n_episodes):
         state, obs = env.reset()
-        h = trainer.init_hidden(env.n_agents)
+        h = trainer.init_hidden(1)
         done = False
         ep_reward = 0
         step = 0
